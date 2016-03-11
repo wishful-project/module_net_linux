@@ -2,6 +2,15 @@ import logging
 import random
 import wishful_upis as upis
 import wishful_framework as wishful_module
+import subprocess
+from wishful_framework.classes import exceptions
+import inspect
+import fcntl, socket, struct
+import netifaces as ni
+from scapy.all import *
+from datetime import date, datetime
+import os
+
 
 __author__ = "Piotr Gawlowicz, A.Zubow"
 __copyright__ = "Copyright (c) 2015, Technische Universität Berlin"
@@ -18,9 +27,6 @@ class NetworkModule(wishful_module.AgentModule):
 
     @wishful_module.bind_function(upis.net.get_iface_hw_addr)
     def get_iface_hw_addr(self, iface):
-        '''
-        @todo: move to common network module; it is not wifi specific
-        '''
 
         self.log.info('getHwAddr() called')
 
@@ -28,20 +34,16 @@ class NetworkModule(wishful_module.AgentModule):
         info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', iface[:15]))
         return ':'.join(['%02x' % ord(char) for char in info[18:24]])
 
+
     @wishful_module.bind_function(upis.net.get_iface_ip_addr)
     def get_iface_ip_addr(self, iface):
-        '''
-        @todo: move to common network module; it is not wifi specific
-        '''
 
         ip = ni.ifaddresses(iface)[2][0]['addr']
         return ip
 
+
     @wishful_module.bind_function(upis.net.change_routing)
     def change_routing(self, servingAP_ip_addr, targetAP_ip_addr, sta_ip_addr):
-        """
-            Manipulates the Linux Routing table.
-        """
 
         # IPDB has a simple yet useful routing management interface.
         # To add a route, one can use almost any syntax::
@@ -63,3 +65,17 @@ class NetworkModule(wishful_module.AgentModule):
             self.log.info("New gateway = %s for %s" % (r.gateway, sta_ip_addr))
 
         return True
+
+    @wishful_module.bind_function(upis.net.set_ARP_entry)
+    def set_ARP_entry(self, iface, mac_addr, ip_addr):
+        """
+            Manipulates the local ARP cache.
+            tbd: use Netlink API
+        """
+        try:
+            [rcode, sout, serr] = self.run_command('sudo arp -s ' + ip_addr + ' -i '+ iface + ' ' + mac_addr)
+            return sout
+        except Exception as e:
+            fname = inspect.currentframe().f_code.co_name
+            self.log.fatal("An error occurred in %s: %s" % (fname, e))
+            raise exceptions.UPIFunctionExecutionFailedException(func_name=fname, err_msg=str(e))
