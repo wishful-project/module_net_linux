@@ -7,7 +7,6 @@ from wishful_framework.classes import exceptions
 import inspect
 import fcntl, socket, struct
 import netifaces as ni
-from scapy.all import *
 from datetime import date, datetime
 import os
 
