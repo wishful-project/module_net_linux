@@ -27,11 +27,12 @@ class NetworkModule(wishful_module.AgentModule):
     @wishful_module.bind_function(upis.net.get_iface_hw_addr)
     def get_iface_hw_addr(self, iface):
 
-        self.log.info('getHwAddr() called')
-
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', iface[:15]))
-        return ':'.join(['%02x' % ord(char) for char in info[18:24]])
+        self.log.info('getHwAddr() called {}'.format(iface))
+        retVal = ni.ifaddresses(iface)[ni.AF_LINK]
+        #retVal = list(retVal[0].values())[1]
+        retVal = retVal[0]
+        retVal = retVal['addr']
+        return retVal
 
 
     @wishful_module.bind_function(upis.net.get_iface_ip_addr)

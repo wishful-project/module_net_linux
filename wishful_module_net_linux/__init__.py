@@ -1,1 +1,1 @@
-from linux_net_module import *
+from .linux_net_module import *
