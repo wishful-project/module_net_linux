@@ -18,8 +18,8 @@ import pytc.Filter
 import wishful_upis as upis
 import wishful_framework as wishful_module
 from wishful_framework.classes import exceptions
-import wishful_framework.upi_arg_classes.flow_id as FlowId
-
+from wishful_framework.upi_arg_classes.flow_id import FlowId
+from wishful_framework.upi_arg_classes.iptables import SimpleMatch, SimpleTarget, SimplePolicy, SimpleRule, SimpleChain, SimpleTable
 
 __author__ = "Piotr Gawlowicz, A.Zubow"
 __copyright__ = "Copyright (c) 2015, Technische Universität Berlin"
@@ -206,7 +206,7 @@ class NetworkModule(wishful_module.AgentModule):
 
 
     @wishful_module.bind_function(upis.net.get_nf_table)
-    def getIpTable(self, tableName, chainName):
+    def getIpTable(self, tableName):
         self.log.debug('getIpTable'.format())
 
         #exec embedded function
@@ -214,7 +214,7 @@ class NetworkModule(wishful_module.AgentModule):
         #refresh table to get current counters
         table.refresh()
         #create simple table (ie. without pointers to ctypes)
-        simpleTable = iptc.SimpleTable(table)
+        simpleTable = SimpleTable(table)
         return simpleTable
 
     @wishful_module.bind_function(upis.net.set_pkt_marking)
@@ -254,7 +254,7 @@ class NetworkModule(wishful_module.AgentModule):
 
 
     @wishful_module.bind_function(upis.net.del_pkt_marking)
-    def delMarking(self, flowId, markId, table, chain):
+    def delMarking(self, flowId, markId, table="mangle", chain="POSTROUTING"):
         #TODO: store table and chain per flowId/mark in set_pkt_marking,
         #it should be possible to remove marking only with flowId/markId
         self.log.debug('delMarking'.format())
