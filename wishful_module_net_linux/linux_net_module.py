@@ -47,9 +47,14 @@ class NetworkModule(wishful_module.AgentModule):
 
     @wishful_module.bind_function(upis.net.get_iface_ip_addr)
     def get_iface_ip_addr(self, iface):
-
-        ip = ni.ifaddresses(iface)[2][0]['addr']
-        return ip
+        """Interfaces may have multiple addresses, return a list with all addresses
+        """
+        #ip = ni.ifaddresses(iface)[2][0]['addr'] #this will return only the first ip address
+        #return ip
+        
+        #this returns a list with all ip addresses
+        ipList = [inetaddr['addr'] for inetaddr in ni.ifaddresses(iface)[ni.AF_INET]] 
+        return ipList
 
 
     @wishful_module.bind_function(upis.net.change_routing)
