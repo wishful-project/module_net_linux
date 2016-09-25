@@ -1,0 +1,18 @@
+## WiSHFUL Agent config file
+
+agent_config:
+  name: 'Local_Controller'
+  info: 'local test of net linux module'
+  type: 'local'
+  iface: 'lo'
+
+controllers:
+  myController:
+      file : local_test.py
+      class_name : NetLinuxController
+      kwargs : {}
+
+modules:
+  iperf:
+      module : wishful_module_net_linux
+      class_name : NetworkModule
