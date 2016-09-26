@@ -25,20 +25,20 @@ class NetLinuxController(wishful_module.ControllerModule):
     def my_start_function(self):
         self.log.info("start net linux test")
 
-        try:
-            node = self.localNode
+        node = self.localNode
+        iface_lst = node.net.get_ifaces()
+        self.log.info('Discovered ifaces %s' % str(iface_lst))
 
-            iface = 'lo'
-            if_hw_addr = node.net.get_iface_hw_addr(iface)
-            self.log.info('Net Linux client: iface %s, hw_addr %s' % (iface, str(if_hw_addr)))
+        for iface in iface_lst:
+            try:
+                if_hw_addr = node.net.get_iface_hw_addr(iface)
+                if_ip_addr = node.net.get_iface_ip_addr(iface)
+                self.log.info('Iface %s, hw_addr %s, ip_addr %s' % (iface, if_hw_addr, if_ip_addr))
+            except Exception as e:
+                self.log.error("{} Failed with iface: {}, err_msg: {}".format(datetime.datetime.now(), iface, e))
 
 
-
-            self.log.info('... done')
-
-        except Exception as e:
-            self.log.error("{} Ctrl:: !!!Exception!!!: {}".format(datetime.datetime.now(), e))
-
+        self.log.info('... done')
 
     @wishful_module.on_exit()
     def my_stop_function(self):

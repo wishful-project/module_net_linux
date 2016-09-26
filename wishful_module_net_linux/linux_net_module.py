@@ -19,8 +19,8 @@ import wishful_upis as upis
 from wishful_agent.core import exceptions
 import wishful_agent.core as wishful_module
 
-from wishful_framework.upi_arg_classes.flow_id import FlowId
-from wishful_framework.upi_arg_classes.iptables import SimpleMatch, SimpleTarget, SimplePolicy, SimpleRule, SimpleChain, SimpleTable
+#from wishful_framework.upi_arg_classes.flow_id import FlowId
+#from wishful_framework.upi_arg_classes.iptables import SimpleMatch, SimpleTarget, SimplePolicy, SimpleRule, SimpleChain, SimpleTable
 
 __author__ = "Piotr Gawlowicz, Anatolij Zubow"
 __copyright__ = "Copyright (c) 2015, Technische Universität Berlin"
@@ -35,23 +35,41 @@ class NetworkModule(wishful_module.AgentModule):
         self.log = logging.getLogger('NetworkModule')
 
 
+    @wishful_module.bind_function(upis.net.get_ifaces)
+    def get_ifaces(self):
+        """Return the list of interface names
+        """
+        self.log.info('get_ifaces() called')
+        retVal = ni.interfaces()
+        return retVal
+
+
     @wishful_module.bind_function(upis.net.get_iface_hw_addr)
     def get_iface_hw_addr(self, iface):
         """Return the MAC address of a particular interface
         """
-        self.log.info('get_iface_hw_addr() called {}'.format(iface))
-        retVal = ni.ifaddresses(iface)[ni.AF_LINK][0]['addr']
-        return retVal
+        try:
+            self.log.info('get_iface_hw_addr() called {}'.format(iface))
+            retVal = ni.ifaddresses(iface)[ni.AF_LINK][0]['addr']
+            return retVal
+        except Exception as e:
+            self.log.fatal("Failed to get HW address for %s, err_msg:%s" % (iface, str(e)))
+            raise exceptions.UPIFunctionExecutionFailedException(func_name=inspect.currentframe().f_code.co_name,
+                                                                 err_msg='Failed to get HW addr: ' + str(e))
 
 
     @wishful_module.bind_function(upis.net.get_iface_ip_addr)
     def get_iface_ip_addr(self, iface):
         """Interfaces may have multiple addresses, return a list with all addresses
         """
-        self.log.info('get_iface_ip_addr() called {}'.format(iface))
-        ipList = [inetaddr['addr'] for inetaddr in ni.ifaddresses(iface)[ni.AF_INET]]
-        return ipList
-
+        try:
+            self.log.info('get_iface_ip_addr() called {}'.format(iface))
+            ipList = [inetaddr['addr'] for inetaddr in ni.ifaddresses(iface)[ni.AF_INET]]
+            return ipList
+        except Exception as e:
+            self.log.fatal("Failed to get IP address for %s, err_msg:%s" % (iface, str(e)))
+            raise exceptions.UPIFunctionExecutionFailedException(func_name=inspect.currentframe().f_code.co_name,
+                                                                 err_msg='Failed to get IP addr: ' + str(e))
 
     @wishful_module.bind_function(upis.net.set_ARP_entry)
     def set_ARP_entry(self, iface, mac_addr, ip_addr):
@@ -63,37 +81,43 @@ class NetworkModule(wishful_module.AgentModule):
             [rcode, sout, serr] = self.run_command('sudo arp -s ' + ip_addr + ' -i '+ iface + ' ' + mac_addr)
             return sout
         except Exception as e:
-            fname = inspect.currentframe().f_code.co_name
-            self.log.fatal("An error occurred in %s: %s" % (fname, e))
-            raise exceptions.UPIFunctionExecutionFailedException(func_name=fname, err_msg=str(e))
+            self.log.fatal("Failed to set ARP entry for iface:%s, err_msg:%s" % str(e))
+            raise exceptions.UPIFunctionExecutionFailedException(func_name=inspect.currentframe().f_code.co_name,
+                                                                 err_msg='Failed to set ARP entry: ' + str(e))
 
 
     @wishful_module.bind_function(upis.net.change_routing)
-    def change_routing(self, servingAP_ip_addr, targetAP_ip_addr, sta_ip_addr):
+    def change_routing(self, serving_gw_ip_addr, target_gw_ip_addr, dst_ip_addr):
         '''
             IPDB has a simple yet useful routing management interface.
             To add a route, one can use almost any syntax::
             pass spec as is
             r = self.ip.routes.get('192.168.5.0/24')
         '''
-        ip = IPDB(mode='direct')
-        r = ip.routes.get(sta_ip_addr + '/32')
-        if not r.gateway:
-            self.log.info("Currently no gateway found, creating it...")
-            ip.routes.add(dst=sta_ip_addr + '/32', gateway=targetAP_ip_addr).commit()
-        else:
-            self.log.info("Old gateway = %s for %s" % (r.gateway, sta_ip_addr))
+        try:
+            ip = IPDB(mode='direct')
+            r = ip.routes.get(dst_ip_addr + '/32')
+            if not r.gateway:
+                self.log.info("Currently no gateway found, creating it...")
+                ip.routes.add(dst=dst_ip_addr + '/32', gateway=target_gw_ip_addr).commit()
+            else:
+                self.log.info("Old gateway = %s for %s" % (r.gateway, dst_ip_addr))
 
-            if (r.gateway.startswith(servingAP_ip_addr) or r.gateway.startswith(targetAP_ip_addr)):
-                r.remove()
+                if (r.gateway.startswith(serving_gw_ip_addr) or r.gateway.startswith(target_gw_ip_addr)):
+                    r.remove()
 
-            ip.routes.add(dst=sta_ip_addr + '/32', gateway=targetAP_ip_addr).commit()
+                ip.routes.add(dst=dst_ip_addr + '/32', gateway=target_gw_ip_addr).commit()
 
-            r = ip.routes.get(sta_ip_addr + '/32')
-            self.log.info("New gateway = %s for %s" % (r.gateway, sta_ip_addr))
+                r = ip.routes.get(dst_ip_addr + '/32')
+                self.log.info("New gateway = %s for %s" % (r.gateway, dst_ip_addr))
 
-        ip.release()
-        return True
+            ip.release()
+            return True
+
+        except Exception as e:
+            self.log.fatal("Failed to change routing, err_msg:%s" % str(e))
+            raise exceptions.UPIFunctionExecutionFailedException(func_name=inspect.currentframe().f_code.co_name,
+                                                                 err_msg='Failed to change routing: ' + str(e))
 
     @wishful_module.bind_function(upis.net.set_netem_profile)
     def set_netem_profile(self, iface, profile):
