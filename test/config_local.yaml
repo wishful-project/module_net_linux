@@ -13,6 +13,6 @@ controllers:
       kwargs : {}
 
 modules:
-  iperf:
+  netlinux:
       module : wishful_module_net_linux
       class_name : NetworkModule
