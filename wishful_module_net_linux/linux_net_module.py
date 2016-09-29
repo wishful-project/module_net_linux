@@ -19,9 +19,8 @@ import wishful_upis as upis
 from wishful_agent.core import exceptions
 import wishful_agent.core as wishful_module
 
-# TODO:piotr, do we need this???
-#from wishful_framework.upi_arg_classes.flow_id import FlowId
-#from wishful_framework.upi_arg_classes.iptables import SimpleMatch, SimpleTarget, SimplePolicy, SimpleRule, SimpleChain, SimpleTable
+from wishful_upis.net import FlowId
+from wishful_upis.net import SimpleMatch, SimpleTarget, SimplePolicy, SimpleRule, SimpleChain, SimpleTable
 
 __author__ = "Piotr Gawlowicz, Anatolij Zubow"
 __copyright__ = "Copyright (c) 2015, Technische Universität Berlin"
