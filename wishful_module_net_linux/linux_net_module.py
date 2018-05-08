@@ -1,4 +1,7 @@
 import os
+import time
+import sh
+import psutil
 import logging
 import random
 import subprocess
@@ -27,12 +30,80 @@ __version__ = "0.1.0"
 __email__ = "{gawlowicz, zubow}@tkn.tu-berlin.de"
 
 
+class TrafficShaper(object):
+    def __init__(self, interface):
+        self.interface = interface
+        self.rate = 1000 * 1000 * 1000
+        self.htc_installed = False
+
+    def install_htb_qdisc(self):
+        rate = self.rate
+
+        cmd = "sudo tc qdisc add dev {} root handle 1:0 htb".format(self.interface)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+
+        cmd = "sudo tc class add dev {} classid 1:1 parent 1:0 htb rate {} ceil {}".format(self.interface, rate, rate)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+
+        cmd = "sudo tc filter add dev {} parent 1: protocol all prio 7 u32 match u32 0 0 flowid 1:1".format(self.interface)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+
+        self.htc_installed = True
+
+    def change_rate(self, rate):
+        self.rate = rate
+        cmd = "sudo tc class change dev {} classid 1:1 parent 1:0 htb rate {} ceil {}".format(self.interface, rate, rate)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+
+    def clear_qdisc(self):
+        cmd = "sudo tc qdisc del root dev {}".format(self.interface)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+        self.htc_installed = False
+
+    def show_qdisc(self):
+        cmd = "sudo tc qdisc show dev {}".format(self.interface)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+
+        cmd = "sudo tc class show dev {}".format(self.interface)
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+
+    def is_installed(self):
+        args = "qdisc show dev {}".format(self.interface)
+        args = args.split(" ")
+        output = sh.tc(args)
+
+        if "0: root" in output:
+            return False
+        return True
+
+
 @wishful_module.build_module
 class NetworkModule(wishful_module.AgentModule):
     def __init__(self):
         super(NetworkModule, self).__init__()
         self.log = logging.getLogger('NetworkModule')
-
+        self.trafficShapers = {}
 
     @wishful_module.bind_function(upis.net.get_iface_hw_addr)
     def get_iface_hw_addr(self, iface):
@@ -356,3 +427,62 @@ class NetworkModule(wishful_module.AgentModule):
         chain = iptc.Chain(iptc.Table(table), chain)
         chain.delete_rule(rule)
         return "OK"
+
+    @wishful_module.bind_function(upis.net.get_iface_stats)
+    def get_iface_stats(self, iface):
+        counters = psutil.net_io_counters(pernic=True)
+        ifStats = counters[iface]
+
+        return [ifStats.bytes_sent, ifStats.bytes_recv]
+
+    @wishful_module.bind_function(upis.net.install_traffic_shaper)
+    def install_traffic_shaper(self, interface):
+        print("InstallShaper")
+        shaper = self.trafficShapers.get(interface, None)
+        if shaper is None:
+            shaper = TrafficShaper(interface)
+            self.trafficShapers[interface] = shaper
+
+        if not shaper.htc_installed:
+            shaper.clear_qdisc()
+            time.sleep(0.2)
+            shaper.install_htb_qdisc()
+            time.sleep(0.2)
+
+        return 0
+
+    @wishful_module.bind_function(upis.net.remove_traffic_shaper)
+    def remove_traffic_shaper(self, interface):
+        print("RemoveShaper")
+        shaper = self.trafficShapers.get(interface, None)
+        if shaper is None:
+            shaper = TrafficShaper(interface)
+            self.trafficShapers[interface] = shaper
+
+        shaper.clear_qdisc()
+        time.sleep(0.2)
+        return 0
+
+    @wishful_module.bind_function(upis.net.change_traffic_rate)
+    def change_traffic_rate(self, interface, rate):
+        print("ChangeRate", interface, rate)
+        if rate > 0:
+            rate = rate * 1000 * 1000
+        else:
+            rate = 100 * 1000  # cannot be 0
+
+        shaper = self.trafficShapers.get(interface, None)
+        if shaper is None:
+            shaper = TrafficShaper(interface)
+            self.trafficShapers[interface] = shaper
+
+        if not shaper.htc_installed:
+            shaper.clear_qdisc()
+            time.sleep(0.2)
+            shaper.install_htb_qdisc()
+            time.sleep(0.2)
+
+        shaper.change_rate(rate)
+        time.sleep(0.2)
+        # shaper.show_qdisc()
+        return 0
